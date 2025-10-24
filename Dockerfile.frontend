@@ -2,32 +2,24 @@
 FROM node:20-alpine AS build-stage
 WORKDIR /app
 
-# Install git
 RUN apk update && apk add --no-cache git
 
-# Clone your frontend repo
 RUN git clone https://github.com/veeru2005/helm-portfolio-frontend.git .
 
-# Clear npm cache and remove existing node_modules
-RUN rm -rf node_modules package-lock.json
+# Remove node_modules but keep package-lock.json
+RUN rm -rf node_modules
 
-# Add esbuild resolution to package.json
+# Force esbuild version in package.json resolutions
 RUN npm pkg set resolutions.esbuild=0.25.10
 
-# Install npm-force-resolutions and apply resolutions
-RUN npm install -g npm-force-resolutions
-RUN npm-force-resolutions
-
-# Install dependencies
+# Install dependencies normally (legacy peer deps and timeout)
 RUN npm install --legacy-peer-deps --timeout=600000
 
-# Increase memory limit and build project
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 
-# Step 2: Runtime stage (Tomcat for serving)
+# Step 2: Runtime stage (Tomcat)
 FROM tomcat:9-jdk17
-
 RUN rm -rf /usr/local/tomcat/webapps/*
 
 COPY --from=build-stage /app/dist /usr/local/tomcat/webapps/portfolio_front1
@@ -52,5 +44,4 @@ RUN cat > /usr/local/tomcat/webapps/portfolio_front1/WEB-INF/web.xml << 'EOF'
 EOF
 
 EXPOSE 8082
-
 CMD ["catalina.sh", "run"]
