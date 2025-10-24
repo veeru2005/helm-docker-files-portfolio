@@ -1,5 +1,5 @@
-    # Step 1: Build stage (Node.js for React/Vite)
-FROM node:20 AS build-stage
+# Use node:20-alpine, which is lighter and more stable for arm64 (Apple Silicon) builds
+FROM node:20-alpine AS build-stage
 WORKDIR /app
 
 # Install git to allow repo cloning
