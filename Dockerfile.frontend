@@ -1,84 +1,59 @@
-Step 1: Build stage (Node.js for React/Vite)
-
-Use node:20-alpine, which is lighter and more stable for arm64 (Apple Silicon) builds
-
+# Step 1: Build stage (Node.js for React/Vite)
 FROM node:20-alpine AS build-stage
 WORKDIR /app
 
-Install git to allow repo cloning (Alpine uses 'apk')
-
+# Install git to allow repo cloning
 RUN apk update && apk add --no-cache git
 
-Clone your frontend repo (replace with your actual repository URL)
-
+# Clone your frontend repo
 RUN git clone https://github.com/veeru2005/helm-portfolio-frontend.git .
 
-Clear npm cache and remove any existing node_modules
-
+# Clear npm cache and remove existing node_modules
 RUN rm -rf node_modules package-lock.json
 
-Install npm-force-resolutions globally first
-
+# Install npm-force-resolutions globally
 RUN npm install -g npm-force-resolutions
 
-Use npx to apply the resolution to package.json before installing
-
-This correctly forces the esbuild version
-
+# Apply forced esbuild version
 RUN npx npm-force-resolutions esbuild@0.25.10
 
-Install dependencies with legacy peer deps and increased timeout
-
-This will now respect the esbuild version set above
-
+# Install dependencies with legacy peer deps and increased timeout
 RUN npm install --legacy-peer-deps --timeout=600000
 
-Set Node.js memory limit and build with more verbose output
-
+# Increase memory limit and build project
 ENV NODE_OPTIONS="--max-old-space-size=4096"
-
 RUN npm run build
 
-Step 2: Runtime stage (Tomcat for serving)
-
+# Step 2: Runtime stage (Tomcat for serving)
 FROM tomcat:9-jdk17
+
+# Clean default Tomcat webapps
 RUN rm -rf /usr/local/tomcat/webapps/*
 
-Copy React build output into Tomcat webapps
-
-Note: Your helm chart likely refers to this path.
-
+# Copy React build output to Tomcat webapps directory
 COPY --from=build-stage /app/dist /usr/local/tomcat/webapps/portfolio_front1
 
-Create web.xml for SPA routing support
-
+# Create web.xml for SPA routing
 RUN mkdir -p /usr/local/tomcat/webapps/portfolio_front1/WEB-INF
 RUN cat > /usr/local/tomcat/webapps/portfolio_front1/WEB-INF/web.xml << 'EOF'
-
 <?xml version="1.0" encoding="UTF-8"?>
-
 <web-app xmlns="http://java.sun.com/xml/ns/javaee"
-xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
-http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
-version="3.0">
-
-<display-name>Portfolio Frontend</display-name>
-
-<!-- Error page for 404s - redirect to index.html for SPA routing -->
-<error-page>
-    <error-code>404</error-code>
-    <location>/index.html</location>
-</error-page>
-
-<!-- Default welcome file -->
-<welcome-file-list>
-    <welcome-file>index.html</welcome-file>
-</welcome-file-list>
-
-
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+         http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
+         version="3.0">
+    <display-name>Portfolio Frontend</display-name>
+    <error-page>
+        <error-code>404</error-code>
+        <location>/index.html</location>
+    </error-page>
+    <welcome-file-list>
+        <welcome-file>index.html</welcome-file>
+    </welcome-file-list>
 </web-app>
 EOF
 
 EXPOSE 8082
+
+# Start Tomcat
 CMD ["catalina.sh", "run"]
