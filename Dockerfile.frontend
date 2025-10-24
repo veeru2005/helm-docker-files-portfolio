@@ -2,7 +2,7 @@
 FROM node:20-alpine AS build-stage
 WORKDIR /app
 
-# Install git to allow repo cloning
+# Install git
 RUN apk update && apk add --no-cache git
 
 # Clone your frontend repo
@@ -11,13 +11,14 @@ RUN git clone https://github.com/veeru2005/helm-portfolio-frontend.git .
 # Clear npm cache and remove existing node_modules
 RUN rm -rf node_modules package-lock.json
 
-# Install npm-force-resolutions globally
+# Add esbuild resolution to package.json
+RUN npm pkg set resolutions.esbuild=0.25.10
+
+# Install npm-force-resolutions and apply resolutions
 RUN npm install -g npm-force-resolutions
+RUN npm-force-resolutions
 
-# Apply forced esbuild version
-RUN npx npm-force-resolutions esbuild@0.25.10
-
-# Install dependencies with legacy peer deps and increased timeout
+# Install dependencies
 RUN npm install --legacy-peer-deps --timeout=600000
 
 # Increase memory limit and build project
@@ -27,13 +28,10 @@ RUN npm run build
 # Step 2: Runtime stage (Tomcat for serving)
 FROM tomcat:9-jdk17
 
-# Clean default Tomcat webapps
 RUN rm -rf /usr/local/tomcat/webapps/*
 
-# Copy React build output to Tomcat webapps directory
 COPY --from=build-stage /app/dist /usr/local/tomcat/webapps/portfolio_front1
 
-# Create web.xml for SPA routing
 RUN mkdir -p /usr/local/tomcat/webapps/portfolio_front1/WEB-INF
 RUN cat > /usr/local/tomcat/webapps/portfolio_front1/WEB-INF/web.xml << 'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -55,5 +53,4 @@ EOF
 
 EXPOSE 8082
 
-# Start Tomcat
 CMD ["catalina.sh", "run"]
